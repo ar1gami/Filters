@@ -1,62 +1,100 @@
 import cv2
 import mediapipe as mp
-import numpy as np
-from filters import FILTROS
-from geometry import closing_detector, render_portal, portal_width
-from hand_tracking import is_finger_extended
+import time
 
-mp_hands = mp.solutions.hands
-INDEX_TIP = mp_hands.HandLandmark.INDEX_FINGER_TIP
-THUMB_TIP = mp_hands.HandLandmark.THUMB_TIP
+from hand_tracking import INDEX_TIP, THUMB_TIP
+from geometry import render_portal, portal_width, ClosingGestureDetector
+from filters import FILTROS
+
+# Map filter functions to readable names (add this in filters.py too)
+FILTER_NAMES = [
+    "Grid",
+    "Duotone",
+    "Halftone B&W",
+    "Chromatic Aberration",
+    "Thermal",
+    "Sepia Vintage",
+    "Frosted Glass",
+    "Pink Halftone",
+]
+
 
 def main():
+    mp_hands = mp.solutions.hands
+    hands = mp_hands.Hands(
+        max_num_hands=2,
+        min_detection_confidence=0.6,
+        min_tracking_confidence=0.6,
+    )
+
     cap = cv2.VideoCapture(0)
-    with mp_hands.Hands(min_detection_confidence=0.8, min_tracking_confidence=0.5) as hands:
-        filtro_index = 0
-        while cap.isOpened():
-            ret, frame = cap.read()
-            if not ret:
-                break
-            frame = cv2.flip(frame, 1)
-            h, w, _ = frame.shape
-            rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-            results = hands.process(rgb)
+    if not cap.isOpened():
+        raise RuntimeError("No se pudo abrir la camara.")
 
-            left_hand = None
-            right_hand = None
-            if results.multi_hand_landmarks and results.multi_handedness:
-                for hand_landmarks, handedness in zip(results.multi_hand_landmarks, results.multi_handedness):
-                    label = handedness.classification[0].label
-                    # MediaPipe returns "Left" and "Right" – we keep as is
-                    if label == "Left":
-                        left_hand = hand_landmarks
-                    else:
-                        right_hand = hand_landmarks
+    filtro_index = 0
+    closing_detector = ClosingGestureDetector()
+    fps = 0
+    prev_time = time.time()
 
-            if left_hand is not None and right_hand is not None:
-                lm_left = left_hand.landmark
-                lm_right = right_hand.landmark
+    while True:
+        ok, frame = cap.read()
+        if not ok:
+            break
+        frame = cv2.flip(frame, 1)
+        h, w = frame.shape[:2]
 
-                # Get index tips
-                p1 = (int(lm_left[INDEX_TIP].x * w), int(lm_left[INDEX_TIP].y * h))
-                p2 = (int(lm_right[INDEX_TIP].x * w), int(lm_right[INDEX_TIP].y * h))
-                # Get thumb tips (for the other two corners)
-                p3 = (int(lm_left[THUMB_TIP].x * w), int(lm_left[THUMB_TIP].y * h))
-                p4 = (int(lm_right[THUMB_TIP].x * w), int(lm_right[THUMB_TIP].y * h))
+        # FPS calculation
+        curr_time = time.time()
+        fps = 1 / (curr_time - prev_time)
+        prev_time = curr_time
 
-                # Calculate some width/height for gesture detection (adjust as needed)
-                width = int(np.linalg.norm(np.array(p1) - np.array(p2)))
-                if closing_detector.update(width, w):   # assuming this function exists
-                    filtro_index = (filtro_index + 1) % len(FILTROS)
+        rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+        results = hands.process(rgb)
 
-                frame = render_portal(frame, p1, p2, p3, p4, FILTROS[filtro_index])
+        left_hand = None
+        right_hand = None
 
-            cv2.imshow("Filters", frame)
-            if cv2.waitKey(1) & 0xFF == ord('q'):
-                break
+        if results.multi_hand_landmarks and results.multi_handedness:
+            for hand_landmarks, handedness in zip(
+                results.multi_hand_landmarks, results.multi_handedness
+            ):
+                raw_label = handedness.classification[0].label
+                label = "Right" if raw_label == "Left" else "Left"
+
+                if label == "Left":
+                    left_hand = hand_landmarks
+                else:
+                    right_hand = hand_landmarks
+
+        if left_hand is not None and right_hand is not None:
+            lm_left = left_hand.landmark
+            lm_right = right_hand.landmark
+
+            p1 = (lm_left[INDEX_TIP].x * w, lm_left[INDEX_TIP].y * h)
+            p2 = (lm_left[THUMB_TIP].x * w, lm_left[THUMB_TIP].y * h)
+            p3 = (lm_right[INDEX_TIP].x * w, lm_right[INDEX_TIP].y * h)
+            p4 = (lm_right[THUMB_TIP].x * w, lm_right[THUMB_TIP].y * h)
+
+            width = portal_width(p1, p2, p3, p4)
+
+            if closing_detector.update(width, w):
+                filtro_index = (filtro_index + 1) % len(FILTROS)
+
+            frame = render_portal(frame, p1, p2, p3, p4, FILTROS[filtro_index])
+
+            # Show filter name and FPS on the frame
+            cv2.putText(frame, f"Filter: {FILTER_NAMES[filtro_index]}", (10, 30),
+                        cv2.FONT_HERSHEY_SIMPLEX, 0.7, (255, 255, 255), 2)
+            cv2.putText(frame, f"FPS: {fps:.1f}", (10, 60),
+                        cv2.FONT_HERSHEY_SIMPLEX, 0.7, (255, 255, 255), 2)
+
+        cv2.imshow("Filters", frame)
+        if cv2.waitKey(1) & 0xFF == ord("q"):
+            break
 
     cap.release()
     cv2.destroyAllWindows()
+
 
 if __name__ == "__main__":
     main()
