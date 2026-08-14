@@ -4,19 +4,7 @@ import time
 
 from hand_tracking import INDEX_TIP, THUMB_TIP
 from geometry import render_portal, portal_width, ClosingGestureDetector
-from filters import FILTROS
-
-# Map filter functions to readable names (add this in filters.py too)
-FILTER_NAMES = [
-    "Grid",
-    "Duotone",
-    "Halftone B&W",
-    "Chromatic Aberration",
-    "Thermal",
-    "Sepia Vintage",
-    "Frosted Glass",
-    "Pink Halftone",
-]
+from filters import FILTROS, FILTER_NAMES
 
 
 def main():
@@ -29,11 +17,12 @@ def main():
 
     cap = cv2.VideoCapture(0)
     if not cap.isOpened():
-        raise RuntimeError("No se pudo abrir la camara.")
+        raise RuntimeError(
+            "No se pudo abrir la camara. Revisa el indice de camara o los permisos."
+        )
 
     filtro_index = 0
     closing_detector = ClosingGestureDetector()
-    fps = 0
     prev_time = time.time()
 
     while True:
@@ -43,9 +32,9 @@ def main():
         frame = cv2.flip(frame, 1)
         h, w = frame.shape[:2]
 
-        # FPS calculation
+        # FPS calculation (optional but handy)
         curr_time = time.time()
-        fps = 1 / (curr_time - prev_time)
+        fps = 1 / (curr_time - prev_time) if (curr_time - prev_time) > 0 else 0
         prev_time = curr_time
 
         rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
@@ -82,7 +71,7 @@ def main():
 
             frame = render_portal(frame, p1, p2, p3, p4, FILTROS[filtro_index])
 
-            # Show filter name and FPS on the frame
+            # Display current filter name and FPS on screen
             cv2.putText(frame, f"Filter: {FILTER_NAMES[filtro_index]}", (10, 30),
                         cv2.FONT_HERSHEY_SIMPLEX, 0.7, (255, 255, 255), 2)
             cv2.putText(frame, f"FPS: {fps:.1f}", (10, 60),
