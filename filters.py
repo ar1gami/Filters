@@ -2,6 +2,8 @@ import cv2
 import numpy as np
 
 
+# ---- ORIGINAL 8 FILTERS ----
+
 def filtro_1(roi: np.ndarray) -> np.ndarray:
     gray = cv2.cvtColor(roi, cv2.COLOR_BGR2GRAY)
     out = np.zeros_like(roi)
@@ -105,13 +107,105 @@ def filtro_grid(roi: np.ndarray) -> np.ndarray:
     return out
 
 
+# ---- 6 NEW FILTERS ----
+
+def filtro_sketch(roi: np.ndarray) -> np.ndarray:
+    """Pencil sketch effect (black & white)."""
+    gray = cv2.cvtColor(roi, cv2.COLOR_BGR2GRAY)
+    inv = cv2.bitwise_not(gray)
+    blur = cv2.GaussianBlur(inv, (21, 21), 0)
+    inv_blur = cv2.bitwise_not(blur)
+    sketch = cv2.divide(gray, inv_blur, scale=256.0)
+    return cv2.cvtColor(sketch, cv2.COLOR_GRAY2BGR)
+
+
+def filtro_glitch(roi: np.ndarray) -> np.ndarray:
+    """Digital glitch with random horizontal tearing and color shifts."""
+    out = roi.copy()
+    h, w, _ = out.shape
+    for _ in range(10):
+        y = np.random.randint(0, h)
+        height = np.random.randint(5, 30)
+        shift = np.random.randint(-30, 30)
+        if y + height > h:
+            continue
+        block = out[y:y+height, :, :].copy()
+        if shift > 0:
+            block = np.roll(block, shift, axis=1)
+            block[:, :shift, :] = 0
+        else:
+            block = np.roll(block, shift, axis=1)
+            block[:, shift:, :] = 0
+        out[y:y+height, :, :] = block
+    return out
+
+
+def filtro_cartoon(roi: np.ndarray) -> np.ndarray:
+    """Cartoon / comic-book effect with bilateral filter and edge detection."""
+    gray = cv2.cvtColor(roi, cv2.COLOR_BGR2GRAY)
+    gray = cv2.medianBlur(gray, 5)
+    edges = cv2.adaptiveThreshold(gray, 255, cv2.ADAPTIVE_THRESH_MEAN_C,
+                                  cv2.THRESH_BINARY, 9, 9)
+    color = cv2.bilateralFilter(roi, 9, 300, 300)
+    cartoon = cv2.bitwise_and(color, color, mask=edges)
+    return cartoon
+
+
+def filtro_emboss(roi: np.ndarray) -> np.ndarray:
+    """3D emboss / relief effect."""
+    kernel = np.array([[-2, -1, 0],
+                       [-1,  1, 1],
+                       [ 0,  1, 2]], dtype=np.float32)
+    emboss = cv2.filter2D(roi, -1, kernel)
+    emboss = cv2.addWeighted(emboss, 0.5, roi, 0.5, 128)
+    return np.clip(emboss, 0, 255).astype(np.uint8)
+
+
+def filtro_negative(roi: np.ndarray) -> np.ndarray:
+    """Color negative (inverted colors)."""
+    return cv2.bitwise_not(roi)
+
+
+def filtro_pixelate(roi: np.ndarray) -> np.ndarray:
+    """Pixel art / mosaic effect by downscaling and upscaling."""
+    h, w = roi.shape[:2]
+    factor = 20
+    small = cv2.resize(roi, (w // factor, h // factor), interpolation=cv2.INTER_LINEAR)
+    return cv2.resize(small, (w, h), interpolation=cv2.INTER_NEAREST)
+
+
+# ---- FILTER LISTS ----
+
 FILTROS = [
-    filtro_grid,
-    filtro_1,
-    filtro_2,
-    filtro_3,
-    filtro_5,
-    filtro_6,
-    filtro_blanco,
-    filtro_rosa,
+    filtro_grid,          # 0
+    filtro_1,             # 1
+    filtro_2,             # 2
+    filtro_3,             # 3
+    filtro_5,             # 4
+    filtro_6,             # 5
+    filtro_blanco,        # 6
+    filtro_rosa,          # 7
+    filtro_sketch,        # 8
+    filtro_glitch,        # 9
+    filtro_cartoon,       # 10
+    filtro_emboss,        # 11
+    filtro_negative,      # 12
+    filtro_pixelate,      # 13
+]
+
+FILTER_NAMES = [
+    "Grid",
+    "Duotone",
+    "Halftone B&W",
+    "Chromatic Aberration",
+    "Thermal",
+    "Sepia Vintage",
+    "Frosted Glass",
+    "Pink Halftone",
+    "Sketch",
+    "Glitch",
+    "Cartoon",
+    "Emboss",
+    "Negative",
+    "Pixelate",
 ]
