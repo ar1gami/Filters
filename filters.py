@@ -1,9 +1,6 @@
 import cv2
 import numpy as np
 
-
-# ---- ORIGINAL 8 FILTERS ----
-
 def filtro_1(roi: np.ndarray) -> np.ndarray:
     gray = cv2.cvtColor(roi, cv2.COLOR_BGR2GRAY)
     out = np.zeros_like(roi)
@@ -107,7 +104,7 @@ def filtro_grid(roi: np.ndarray) -> np.ndarray:
     return out
 
 
-# ---- 6 NEW FILTERS ----
+# Additional Filters
 
 def filtro_sketch(roi: np.ndarray) -> np.ndarray:
     """Pencil sketch effect (black & white)."""
@@ -174,7 +171,7 @@ def filtro_pixelate(roi: np.ndarray) -> np.ndarray:
     return cv2.resize(small, (w, h), interpolation=cv2.INTER_NEAREST)
 
 
-# ---- FILTER LISTS ----
+# Filter List:
 
 FILTROS = [
     filtro_grid,          # 0
